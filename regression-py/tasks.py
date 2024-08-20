@@ -821,7 +821,7 @@ def run_vulnerability_test(c, platform=PLATFORM, env=DEV_ENV):
     with py_env(c, env_name):
         c.run(
             f'conda list | tail -n +4 | tr -s " " " " '
-            '| cut -f 1,2 -d " " | sed "s/\ /==/g" '
+            '| cut -f 1,2 -d " " | sed "s/\\ /==/g" '
             "| safety check --stdin",
         )
 
