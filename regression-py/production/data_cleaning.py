@@ -14,7 +14,7 @@ from ta_lib.core.api import (
     save_dataset,
     string_cleaning
 )
-from scripts import binned_selling_price
+from scripts import binned_median_income
 
 
 @register_processor("data-cleaning", "product")
@@ -94,73 +94,59 @@ def clean_order_table(context, params):
 
 
 @register_processor("data-cleaning", "sales")
-def clean_sales_table(context, params):
-    """Clean the ``SALES`` data table.
+def clean_housing_table(context, params):
+    """Clean the ``HOUSING`` data table.
 
     The table is a summary table obtained by doing a ``inner`` join of the
     ``PRODUCT`` and ``ORDERS`` tables.
     """
-    input_product_ds = "cleaned/product"
-    input_orders_ds = "cleaned/orders"
-    output_dataset = "cleaned/sales"
+    input_dataset = "raw/housing"
+    output_dataset = "cleaned/housing"
 
-    # load datasets
-    product_df = load_dataset(context, input_product_ds)
-    orders_df = load_dataset(context, input_orders_ds)
+    # load dataset
+    housing_df = load_dataset(context, input_dataset)
 
-    sales_df_clean = orders_df.merge(product_df, how="inner", on="sku")
+    housing_df_clean = (
+        housing_df
+        # set dtypes : nothing to do here
+        .passthrough()
+        .transform_columns(["ocean_proximity"], string_cleaning, elementwise=False)
+        .replace({"": np.NaN})
+        # clean column names (comment out this line while cleaning data above)
+        .clean_names(case_type="snake")
+    )
 
-    save_dataset(context, sales_df_clean, output_dataset)
-    return sales_df_clean
+    # save the dataset
+    save_dataset(context, housing_df_clean, output_dataset)
+
+    return housing_df_clean
 
 
 @register_processor("data-cleaning", "train-test")
 def create_training_datasets(context, params):
-    """Split the ``SALES`` table into ``train`` and ``test`` datasets."""
+    """Split the ``HOUSING`` table into ``train`` and ``test`` datasets."""
 
-    input_dataset = "cleaned/sales"
-    output_train_features = "train/sales/features"
-    output_train_target = "train/sales/target"
-    output_test_features = "test/sales/features"
-    output_test_target = "test/sales/target"
+    input_dataset = "cleaned/housing"
+    output_train_features = "train/housing/features"
+    output_train_target = "train/housing/target"
+    output_test_features = "test/housing/features"
+    output_test_target = "test/housing/target"
     
     # load dataset
-    sales_df_processed = load_dataset(context, input_dataset)
-
-    # creating additional features that are not affected by train test split. These are features that are processed globally
-    # first time customer(02_data_processing.ipynb)################
-    cust_details = (
-        sales_df_processed.groupby(["customername"])
-        .agg({"ledger_date": "min"})
-        .reset_index()
-    )
-    cust_details.columns = ["customername", "ledger_date"]
-    cust_details["first_time_customer"] = 1
-    sales_df_processed = sales_df_processed.merge(
-        cust_details, on=["customername", "ledger_date"], how="left"
-    )
-    sales_df_processed["first_time_customer"].fillna(0, inplace=True)
-
-    # days since last purchas(02_data_processing.ipynb)###########
-    sales_df_processed.sort_values("ledger_date", inplace=True)
-    sales_df_processed["days_since_last_purchase"] = (
-        sales_df_processed.groupby("customername")["ledger_date"]
-        .diff()
-        .dt.days.fillna(0, downcast="infer")
-    )
+    housing_df_processed = load_dataset(context, input_dataset)
 
     # split the data
     splitter = StratifiedShuffleSplit(
         n_splits=1, test_size=params["test_size"], random_state=context.random_seed
     )
-    sales_df_train, sales_df_test = custom_train_test_split(
-        sales_df_processed, splitter, by=binned_selling_price
+    housing_df_train, housing_df_test = custom_train_test_split(
+        housing_df_processed, splitter, by=binned_median_income
     )
 
     # split train dataset into features and target
     target_col = params["target"]
     train_X, train_y = (
-        sales_df_train
+        housing_df_train
         # split the dataset to train and test
         .get_features_targets(target_column_names=target_col)
     )
@@ -171,7 +157,7 @@ def create_training_datasets(context, params):
 
     # split test dataset into features and target
     test_X, test_y = (
-        sales_df_test
+        housing_df_test
         # split the dataset to train and test
         .get_features_targets(target_column_names=target_col)
     )

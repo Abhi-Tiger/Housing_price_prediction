@@ -24,12 +24,13 @@ def train_model(context, params):
     """Train a regression model."""
     artifacts_folder = DEFAULT_ARTIFACTS_PATH
 
-    input_features_ds = "train/sales/features"
-    input_target_ds = "train/sales/target"
+    input_features_ds = "train/housing/features"
+    input_target_ds = "train/housing/target"
     
     # load training datasets
     train_X = load_dataset(context, input_features_ds)
     train_y = load_dataset(context, input_target_ds)
+    num_columns = train_X.select_dtypes("number").columns
 
     # load pre-trained feature pipelines and other artifacts
     curated_columns = load_pipeline(op.join(artifacts_folder, "curated_columns.joblib"))
@@ -47,7 +48,8 @@ def train_model(context, params):
     # transform the training data
     train_X = get_dataframe(
         features_transformer.fit_transform(train_X, train_y),
-        get_feature_names_from_column_transformer(features_transformer),
+        list(features_transformer.transformers_[0][1][0].get_feature_names())
+        + list(num_columns),
     )
     train_X = train_X[curated_columns]
 
