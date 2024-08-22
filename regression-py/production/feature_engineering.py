@@ -9,10 +9,11 @@ training/scoring pipelines.
 import logging
 import os.path as op
 
-from category_encoders import TargetEncoder
+from category_encoders import TargetEncoder, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from ta_lib.core.api import (
     get_dataframe,
@@ -33,8 +34,8 @@ logger = logging.getLogger(__name__)
 def transform_features(context, params):
     """Transform dataset to create training datasets."""
 
-    input_features_ds = "train/sales/features"
-    input_target_ds = "train/sales/target"
+    input_features_ds = "train/housing/features"
+    input_target_ds = "train/housing/target"
 
     artifacts_folder = DEFAULT_ARTIFACTS_PATH
 
@@ -56,10 +57,17 @@ def transform_features(context, params):
     # ``TargetEncoder`` and a ``SimpleImputer`` to first encode the
     # categorical variable into a numerical values and then impute any missing
     # values using ``most_frequent`` strategy.
-    tgt_enc_simple_impt = Pipeline(
+    oh_enc_simple_impt = Pipeline(
         [
-            ("target_encoding", TargetEncoder(return_df=False)),
+            ("one_hot_encoding", OneHotEncoder()),
             ("simple_impute", SimpleImputer(strategy="most_frequent")),
+        ]
+    )
+
+    simple_impute_std_scale = Pipeline(
+        [
+            ("simple_impute", SimpleImputer(strategy="median")),
+            ("standard_scalar", StandardScaler()),
         ]
     )
 
@@ -68,22 +76,10 @@ def transform_features(context, params):
     # for sequential transforms use a pipeline as shown above.
     features_transformer = ColumnTransformer(
         [
-            # categorical columns
-            (
-                "tgt_enc",
-                TargetEncoder(return_df=False),
-                list(
-                    set(cat_columns)
-                    - set(["technology", "functional_status", "platforms"])
-                ),
-            ),
-            (
-                "tgt_enc_sim_impt",
-                tgt_enc_simple_impt,
-                ["technology", "functional_status", "platforms"],
-            ),
-            # numeric columns
-            ("med_enc", SimpleImputer(strategy="median"), num_columns),
+            ## categorical columns
+            ("oh_enc_simple_imputer", oh_enc_simple_impt, list(set(cat_columns))),
+            ## numeric columns
+            ("simple_impute_std_scale", simple_impute_std_scale, num_columns),
         ]
     )
 
@@ -108,34 +104,15 @@ def transform_features(context, params):
     # sample_X and sample_y if required. 
     train_X = get_dataframe(
         features_transformer.fit_transform(train_X, train_y),
-        get_feature_names_from_column_transformer(features_transformer),
+        list(features_transformer.transformers_[0][1][0].get_feature_names())
+        + list(num_columns),
     )
 
     # Note: we can create a transformer/feature selector that simply drops
     # a specified set of columns. But, we don't do that here to illustrate
     # what to do when transformations don't cleanly fall into the sklearn
     # pattern.
-    curated_columns = list(
-        set(train_X.columns.to_list())
-        - set(
-            [
-                "manufacturer",
-                "inventory_id",
-                "ext_grade",
-                "source_channel",
-                "tgt_enc_iter_impt_platforms",
-                "ext_model_family",
-                "order_no",
-                "line",
-                "inventory_id",
-                "gp",
-                "selling_price",
-                "selling_cost",
-                "invoice_no",
-                "customername",
-            ]
-        )
-    )
+    curated_columns = list(set(train_X.columns.to_list()) - set(["total_bedrooms"]))
 
     # saving the list of relevant columns and the pipeline.
     save_pipeline(

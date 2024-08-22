@@ -42,8 +42,7 @@ addon_dict = {
     "extras": "addon-extras",
     "jupyter": "addon-jupyter",
     "testing": "addon-testing",
-    "ts": "addon-ts",
-    "tareg": "addon-tareg"
+    "ts": "addon-ts"
 }
 
 # ---------
@@ -484,7 +483,6 @@ def _setup_addon_common(c,
     jupyter=False,
     extras=False,
     ts=False,
-    tareg=False,
     ):
 
     addon_list = []
@@ -500,8 +498,6 @@ def _setup_addon_common(c,
         addon_list.append(addon_dict["extras"])
     if ts or all:
         addon_list.append(addon_dict["ts"])
-    if tareg or all:
-        addon_list.append(addon_dict["tareg"])
 
     addon_file_list = _addon_file_paths(platform=platform, env=env, addon_list=addon_list)
 
@@ -586,7 +582,6 @@ def setup_addon(
     jupyter=False,
     extras=False,
     ts=False,
-    tareg=False,
 ):
     """Installs add on packages related to documentation, testing or code-formatting.
 
@@ -606,8 +601,7 @@ def setup_addon(
     formatting=formatting,
     jupyter=jupyter,
     extras=extras,
-    ts=ts,
-    tareg=tareg,)
+    ts=ts,)
 
 
 @task(name="setup_addon_pyspark")
@@ -622,7 +616,6 @@ def setup_addon_pyspark(
     jupyter=False,
     extras=False,
     ts=False,
-    tareg=False,
 ):
     """Installs add on packages related to documentation, testing or code-formatting for pyspark envs.
 
@@ -642,8 +635,7 @@ def setup_addon_pyspark(
     formatting=formatting,
     jupyter=jupyter,
     extras=extras,
-    ts=ts,
-    tareg=tareg,)
+    ts=ts,)
 
 @task(name="format-code")
 def format_code(c, platform=PLATFORM, env=DEV_ENV, path="."):
@@ -776,6 +768,16 @@ def setup_ci_env(c, platform=PLATFORM, force=False):
         c.run(f"""python -m pip install -e "{HERE}" """)
 
 
+@task(name="calculate_complexity")
+def calculate_complexity(c):
+    """
+    Calculate the complexity score for the codebase using Radon.
+    """
+    print("Calculating complexity score using Radon...")
+    result = c.run("radon cc -s -a .", pty=True)
+    print(result.stdout)
+
+
 _create_task_collection(
     "dev",
     setup_env,
@@ -788,8 +790,8 @@ _create_task_collection(
     setup_info,
     _build_docker_image,
     setup_ci_env,
+    calculate_complexity,
 )
-
 
 # -------------
 # Test/QC tasks
@@ -821,7 +823,7 @@ def run_vulnerability_test(c, platform=PLATFORM, env=DEV_ENV):
     with py_env(c, env_name):
         c.run(
             f'conda list | tail -n +4 | tr -s " " " " '
-            '| cut -f 1,2 -d " " | sed "s/\\ /==/g" '
+            '| cut -f 1,2 -d " " | sed "s/\ /==/g" '
             "| safety check --stdin",
         )
 
@@ -902,7 +904,6 @@ def validate_env(
     jupyter=False,
     extras=False,
     ts=False,
-    tareg=False,
     usecase=None
     ):
 
@@ -925,8 +926,6 @@ def validate_env(
         addon_list.append(addon_dict["extras"])
     if ts or all:
         addon_list.append(addon_dict["ts"])
-    if tareg or all:
-        addon_list.append(addon_dict["tareg"])
 
     addon_file_list = _addon_file_paths(platform=platform, env=env, addon_list=addon_list)
 

@@ -11,15 +11,16 @@ from ta_lib.core.api import (get_dataframe,
 def score_model(context, params):   
     """Score a pre-trained model."""
 
-    input_features_ds = "test/sales/features"
-    input_target_ds = "test/sales/target"
-    output_ds = "score/sales/output"
+    input_features_ds = "test/housing/features"
+    input_target_ds = "test/housing/target"
+    output_ds = "score/housing/output"
     
     artifacts_folder = DEFAULT_ARTIFACTS_PATH
 
     # load test datasets
     test_X = load_dataset(context, input_features_ds)
     test_y = load_dataset(context, input_target_ds)
+    num_columns = test_X.select_dtypes("number").columns
 
     # load the feature pipeline and training pipelines
     curated_columns = load_pipeline(op.join(artifacts_folder, "curated_columns.joblib"))
@@ -29,7 +30,8 @@ def score_model(context, params):
     # transform the test dataset
     test_X = get_dataframe(
         features_transformer.transform(test_X),
-        get_feature_names_from_column_transformer(features_transformer),
+        list(features_transformer.transformers_[0][1][0].get_feature_names())
+        + list(num_columns),
     )
     test_X = test_X[curated_columns]
 
